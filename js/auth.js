@@ -56,6 +56,16 @@ export async function requireLogin() {
 }
 
 // ========================================
+// CHECK AUTH WITHOUT REDIRECT (for login page)
+// ========================================
+
+export async function checkAuthOnly() {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return user;
+}
+
+// ========================================
 // REQUIRE SPECIFIC ROLE
 // ========================================
 

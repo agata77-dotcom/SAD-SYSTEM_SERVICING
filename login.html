@@ -38,16 +38,17 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module">
         import { supabase } from './js/supabase.js';
-        import { getCurrentUserProfile } from './js/auth.js';
 
-        // Check if already logged in
-        const check = await getCurrentUserProfile();
-        if (check) {
+        // Check if already logged in (without redirect loop)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
             window.location.href = 'index.html';
         }
 
+        // Login form handler
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
