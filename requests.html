@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Requests - ICT Service Request System</title>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <header class="topbar">
+
+        <div>
+            <h1>Service Requests</h1>
+            <p>Manage and review submitted service requests.</p>
+        </div>
+
+        <a href="index.html">← Dashboard</a>
+
+    </header>
+
+
+    <main class="page-container">
+
+        <div class="page-header">
+
+            <div>
+                <h2>All Requests</h2>
+                <p>Administrator request management.</p>
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Requester</th>
+                        <th>Department</th>
+                        <th>Category</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+
+                </thead>
+
+                <tbody id="requestsTable">
+
+                    <tr>
+                        <td colspan="6">
+                            Loading requests...
+                        </td>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </main>
+
+
+    <script type="module">
+
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+
+        const profile = await requireRole([
+            "Administrator"
+        ]);
+
+
+        if (profile) {
+
+            loadRequests();
+
+        }
+
+
+        async function loadRequests() {
+
+            const table =
+                document.getElementById("requestsTable");
+
+
+            const { data, error } = await supabase
+                .from("service_requests")
+                .select("*")
+                .order("created_at", {
+                    ascending: false
+                });
+
+
+            if (error) {
+
+                console.error(error);
+
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="6">
+                            Unable to load requests.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+
+            if (!data || data.length === 0) {
+
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="6">
+                            No service requests found.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+
+            table.innerHTML = "";
+
+
+            data.forEach(request => {
+
+                const row =
+                    document.createElement("tr");
+
+
+                row.innerHTML = `
+
+                    <td>
+                        ${request.requester_name || "N/A"}
+                    </td>
+
+                    <td>
+                        ${request.department || "N/A"}
+                    </td>
+
+                    <td>
+                        ${request.category || "N/A"}
+                    </td>
+
+                    <td>
+                        ${request.priority || "N/A"}
+                    </td>
+
+                    <td>
+                        ${request.status || "Pending"}
+                    </td>
+
+                    <td>
+
+                        <button
+                            class="secondary-btn"
+                            onclick="viewRequest('${request.id}')">
+
+                            View
+
+                        </button>
+
+                    </td>
+
+                `;
+
+
+                table.appendChild(row);
+
+            });
+
+        }
+
+
+        window.viewRequest = function(id) {
+
+            alert(
+                "Request ID: " + id +
+                "\n\nDetailed request management will be added in the next step."
+            );
+
+        };
+
+    </script>
+
+</body>
+</html>

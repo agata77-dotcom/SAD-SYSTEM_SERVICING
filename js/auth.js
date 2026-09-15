@@ -1,143 +1,110 @@
-// ========================================
-// AUTHENTICATION
-// ========================================
-
-// Get the current page name
-const currentPage = window.location.pathname.split("/").pop();
-
+import { supabase } from './supabase.js';
 
 // ========================================
-// LOGIN
+// GET CURRENT AUTHENTICATED USER
 // ========================================
 
-const loginForm = document.getElementById("loginForm");
-
-if (loginForm) {
-
-    loginForm.addEventListener("submit", async function (event) {
-
-        event.preventDefault();
-
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-        const loginMessage = document.getElementById("loginMessage");
-
-        loginMessage.textContent = "Logging in...";
-
-        const { data, error } =
-            await supabaseClient.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
-        // Login failed
-        if (error) {
-
-            console.error("Login error:", error);
-
-            loginMessage.textContent =
-                "Login failed: " + error.message;
-
-            return;
-        }
-
-        // Login successful
-        loginMessage.textContent =
-            "Login successful! Redirecting...";
-
-        window.location.href = "index.html";
-    });
-}
-
-
-// ========================================
-// CHECK USER SESSION
-// ========================================
-
-async function checkUserSession() {
-
-    const {
-        data: { session },
-        error
-    } = await supabaseClient.auth.getSession();
-
-    if (error) {
-
-        console.error(
-            "Session error:",
-            error
-        );
-
-        return;
-    }
-
-
-    // ----------------------------------------
-    // User is NOT logged in
-    // ----------------------------------------
-
-    if (!session && currentPage === "index.html") {
-
+export async function getCurrentUser() {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
         window.location.href = "login.html";
-
-        return;
+        return null;
     }
-
-
-    // ----------------------------------------
-    // User IS logged in
-    // but is trying to access login page
-    // ----------------------------------------
-
-    if (session && currentPage === "login.html") {
-
-        window.location.href = "index.html";
-
-        return;
-    }
+    return user;
 }
 
+// ========================================
+// GET USER PROFILE
+// ========================================
+
+export async function getUserProfile(userId) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+    if (error) {
+        console.error("Profile error:", error);
+        return null;
+    }
+    return data;
+}
+
+// ========================================
+// GET CURRENT USER + PROFILE
+// ========================================
+
+export async function getCurrentUserProfile() {
+    const user = await getCurrentUser();
+    if (!user) return null;
+    const profile = await getUserProfile(user.id);
+    if (!profile) {
+        alert("User profile not found.");
+        await supabase.auth.signOut();
+        window.location.href = "login.html";
+        return null;
+    }
+    return { authUser: user, profile };
+}
+
+// ========================================
+// REQUIRE LOGIN
+// ========================================
+
+export async function requireLogin() {
+    return await getCurrentUserProfile();
+}
+
+// ========================================
+// REQUIRE SPECIFIC ROLE
+// ========================================
+
+export async function requireRole(allowedRoles) {
+    const result = await getCurrentUserProfile();
+    if (!result) return null;
+    const profile = result.profile;
+    if (!allowedRoles.includes(profile.role)) {
+        alert("Access denied. You do not have permission to access this page.");
+        window.location.href = "index.html";
+        return null;
+    }
+    return result;
+}
 
 // ========================================
 // LOGOUT
 // ========================================
 
-const logoutBtn =
-    document.getElementById("logoutBtn");
-
-if (logoutBtn) {
-
-    logoutBtn.addEventListener(
-        "click",
-        async function () {
-
-            const { error } =
-                await supabaseClient.auth.signOut();
-
-            if (error) {
-
-                console.error(
-                    "Logout error:",
-                    error
-                );
-
-                alert(
-                    "Logout failed: " +
-                    error.message
-                );
-
-                return;
-            }
-
-            // Return to login page
-            window.location.href = "login.html";
-        }
-    );
+export async function logout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        console.error("Logout error:", error);
+        alert("Unable to logout.");
+        return;
+    }
+    window.location.href = "login.html";
 }
 
+// ========================================
+// CHECK IF ADMIN
+// ========================================
+
+export function isAdmin(profile) {
+    return profile && profile.role === 'Administrator';
+}
 
 // ========================================
-// RUN SESSION CHECK
+// CHECK IF STAFF
 // ========================================
 
-checkUserSession();
+export function isStaff(profile) {
+    return profile && profile.role === 'Laboratory Staff';
+}
+
+// ========================================
+// CHECK IF REQUESTER/VIEWER
+// ========================================
+
+export function isRequester(profile) {
+    return profile && ['Requester', 'Viewer'].includes(profile.role);
+}

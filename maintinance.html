@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Pending { background: #fef3c7; color: #92400e; }
+        .status-In Progress { background: #dbeafe; color: #1e40af; }
+        .status-Completed { background: #d1fae5; color: #065f46; }
+        .status-Cancelled { background: #d1d5db; color: #374151; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Maintenance</h1>
+            <p>Monitor equipment maintenance activities.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <div class="card">
+            <h2>Maintenance Records</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Equipment</th>
+                            <th>Type</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="maintenanceTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Submit Maintenance Request</h2>
+            <form id="maintenanceForm">
+                <div class="form-group">
+                    <label for="maintenanceEquipment">Equipment</label>
+                    <select id="maintenanceEquipment" required>
+                        <option value="">Select equipment...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="maintenanceType">Maintenance Type</label>
+                    <input type="text" id="maintenanceType" placeholder="e.g. Repair, Inspection, Cleaning" required>
+                </div>
+                <div class="form-group">
+                    <label for="maintenanceDesc">Description</label>
+                    <textarea id="maintenanceDesc" rows="3" placeholder="Describe the issue..."></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Submit</button>
+            </form>
+            <p id="maintenanceMessage" class="message" style="margin-top:15px;"></p>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator", "Laboratory Staff"]);
+
+        if (profile) {
+            await loadMaintenance();
+            await loadEquipmentOptions();
+            setupForm();
+        }
+
+        async function loadEquipmentOptions() {
+            const select = document.getElementById("maintenanceEquipment");
+            const { data } = await supabase.from("equipment").select("*").order("name");
+            if (!data) return;
+            data.forEach(eq => {
+                const opt = document.createElement("option");
+                opt.value = eq.id;
+                opt.textContent = `${eq.equipment_id} - ${eq.name}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function setupForm() {
+            document.getElementById("maintenanceForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const equipmentId = document.getElementById("maintenanceEquipment").value;
+                const type = document.getElementById("maintenanceType").value.trim();
+                const desc = document.getElementById("maintenanceDesc").value.trim();
+                const msg = document.getElementById("maintenanceMessage");
+
+                if (!equipmentId || !type) {
+                    msg.textContent = "Fill all required fields.";
+                    msg.style.color = "red";
+                    return;
+                }
+
+                const { data, error } = await supabase
+                    .from("maintenance")
+                    .insert({ equipment_id: equipmentId, maintenance_type: type, description: desc });
+
+                if (error) {
+                    msg.textContent = "Error: " + error.message;
+                    msg.style.color = "red";
+                } else {
+                    msg.textContent = "Maintenance request submitted.";
+                    msg.style.color = "green";
+                    document.getElementById("maintenanceForm").reset();
+                    await loadMaintenance();
+                }
+            });
+        }
+
+        async function loadMaintenance() {
+            const table = document.getElementById("maintenanceTable");
+            const { data, error } = await supabase
+                .from("maintenance")
+                .select("*, equipment:equipment_id(equipment_id, name)")
+                .order("maintenance_date", { ascending: false });
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="5">Unable to load.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="5">No records.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            data.forEach(rec => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${rec.equipment?.equipment_id || "N/A"}</td>
+                    <td>${rec.maintenance_type || "N/A"}</td>
+                    <td>${rec.maintenance_date ? new Date(rec.maintenance_date).toLocaleDateString() : "N/A"}</td>
+                    <td><span class="status-badge status-${rec.status}">${rec.status}</span></td>
+                    <td>${rec.description || "N/A"}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+    </script>
+
+</body>
+</html>

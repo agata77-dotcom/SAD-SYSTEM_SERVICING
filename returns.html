@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Returns - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Pending { background: #fef3c7; color: #92400e; }
+        .status-Approved { background: #d1fae5; color: #065f46; }
+        .status-Rejected { background: #fee2e2; color: #991b1b; }
+        .status-Released { background: #dbeafe; color: #1e40af; }
+        .status-Returned { background: #e0e7ff; color: #3730a3; }
+        .status-Overdue { background: #fecaca; color: #7f1d1d; }
+        .status-Closed { background: #d1d5db; color: #374151; }
+        .btn-return { background: #8b5cf6; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-damaged { background: #ef4444; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Equipment Returns</h1>
+            <p>Manage returned laboratory equipment.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <div class="card">
+            <h2>Active Borrowings to Return</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Borrower</th>
+                            <th>Equipment</th>
+                            <th>Released Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="returnsTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Return History</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Borrower</th>
+                            <th>Equipment</th>
+                            <th>Return Date</th>
+                            <th>Status</th>
+                            <th>Damage</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTable">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator", "Laboratory Staff"]);
+
+        if (profile) {
+            await loadActiveBorrowings();
+            await loadReturnHistory();
+        }
+
+        async function loadActiveBorrowings() {
+            const table = document.getElementById("returnsTable");
+
+            const { data, error } = await supabase
+                .from("borrowing_requests")
+                .select("*, profiles(full_name), equipment:equipment_id(equipment_id, name)")
+                .eq("status", "Released")
+                .order("created_at", { ascending: false });
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="5">Unable to load.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="5">No active borrowings.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            data.forEach(req => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${req.request_id}</td>
+                    <td>${req.profiles?.full_name || "N/A"}</td>
+                    <td>${req.equipment?.equipment_id || "N/A"}</td>
+                    <td>${req.released_date ? new Date(req.released_date).toLocaleDateString() : "N/A"}</td>
+                    <td>
+                        <button class="btn-return" onclick="returnEquip('${req.request_id}', false)">Return</button>
+                        <button class="btn-damaged" onclick="returnEquip('${req.request_id}', true)">Return Damaged</button>
+                    </td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        async function loadReturnHistory() {
+            const table = document.getElementById("historyTable");
+
+            const { data, error } = await supabase
+                .from("borrowing_requests")
+                .select("*, profiles(full_name), equipment:equipment_id(equipment_id, name)")
+                .in("status", ["Returned", "Closed"])
+                .order("created_at", { ascending: false });
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="6">Unable to load.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="6">No return history.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            data.forEach(req => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${req.request_id}</td>
+                    <td>${req.profiles?.full_name || "N/A"}</td>
+                    <td>${req.equipment?.equipment_id || "N/A"}</td>
+                    <td>${req.returned_date ? new Date(req.returned_date).toLocaleDateString() : "N/A"}</td>
+                    <td><span class="status-badge status-${req.status}">${req.status}</span></td>
+                    <td>${req.damage_noted ? "⚠️ Yes" : "No"}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        window.returnEquip = async function(requestId, damaged) {
+            if (!confirm(`Return equipment for request ${requestId}?${damaged ? "\n\n⚠️ Damage will be noted." : ""}`)) return;
+            const { data, error } = await supabase.rpc("return_equipment", {
+                p_request_id: requestId,
+                p_damaged: damaged
+            });
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert(data.message);
+                await loadActiveBorrowings();
+                await loadReturnHistory();
+            }
+        };
+    </script>
+
+</body>
+</html>

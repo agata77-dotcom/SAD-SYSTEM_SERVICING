@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Borrowing - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Pending { background: #fef3c7; color: #92400e; }
+        .status-Approved { background: #d1fae5; color: #065f46; }
+        .status-Rejected { background: #fee2e2; color: #991b1b; }
+        .status-Released { background: #dbeafe; color: #1e40af; }
+        .status-Returned { background: #e0e7ff; color: #3730a3; }
+        .status-Overdue { background: #fecaca; color: #7f1d1d; }
+        .status-Closed { background: #d1d5db; color: #374151; }
+        .btn-approve { background: #10b981; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; margin-right: 6px; }
+        .btn-reject { background: #ef4444; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; margin-right: 6px; }
+        .btn-release { background: #3b82f6; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; margin-right: 6px; }
+        .btn-return { background: #8b5cf6; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; margin-right: 6px; }
+        .btn-close { background: #6b7280; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        textarea { resize: vertical; }
+        .action-cell { white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Borrowing Requests</h1>
+            <p id="subtitle">Submit and manage borrowing requests.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <!-- ================================
+             SUBMIT REQUEST FORM (Staff/Requester)
+        ================================ -->
+
+        <div class="card" id="submitSection">
+            <h2>Submit Borrowing Request</h2>
+            <form id="borrowForm">
+                <div class="form-group">
+                    <label for="borrowEquipment">Equipment</label>
+                    <select id="borrowEquipment" required>
+                        <option value="">Select equipment...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="borrowReason">Reason / Purpose</label>
+                    <textarea id="borrowReason" rows="3" placeholder="Enter the reason for borrowing..." required></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Submit Request</button>
+            </form>
+            <p id="borrowMessage" class="message" style="margin-top:15px;"></p>
+        </div>
+
+        <!-- ================================
+             APPROVAL PANEL (Admin)
+        ================================ -->
+
+        <div class="card" id="adminApprovalSection" style="display:none;">
+            <h2>Approval Queue</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Requester</th>
+                            <th>Equipment</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvalTable">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ================================
+             MY REQUESTS TABLE
+        ================================ -->
+
+        <div class="card">
+            <h2 id="requestsTitle">My Requests</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Equipment</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requestsTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator", "Laboratory Staff", "Requester"]);
+
+        if (profile) {
+            const isAdmin = profile.role === "Administrator";
+            const isStaff = profile.role === "Laboratory Staff";
+
+            if (isAdmin) {
+                document.getElementById("adminApprovalSection").style.display = "block";
+                document.getElementById("subtitle").textContent = "Admin: Approve, release, and return equipment.";
+            } else if (isStaff) {
+                document.getElementById("adminApprovalSection").style.display = "block";
+                document.getElementById("subtitle").textContent = "Staff: Submit requests, release and return equipment.";
+            }
+
+            await loadEquipment();
+            await loadMyRequests();
+            loadApprovalQueue();
+        }
+
+        // ========================================
+        // LOAD EQUIPMENT FOR SELECT
+        // ========================================
+
+        async function loadEquipment() {
+            const select = document.getElementById("borrowEquipment");
+            const { data, error } = await supabase
+                .from("equipment")
+                .select("*")
+                .eq("status", "Available")
+                .order("name");
+
+            if (error || !data) return;
+
+            data.forEach(eq => {
+                const opt = document.createElement("option");
+                opt.value = eq.id;
+                opt.textContent = `${eq.equipment_id} - ${eq.name} (${eq.category})`;
+                select.appendChild(opt);
+            });
+        }
+
+        // ========================================
+        // SUBMIT BORROWING REQUEST
+        // ========================================
+
+        document.getElementById("borrowForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const equipmentId = document.getElementById("borrowEquipment").value;
+            const reason = document.getElementById("borrowReason").value.trim();
+            const msgEl = document.getElementById("borrowMessage");
+
+            if (!equipmentId || !reason) {
+                msgEl.textContent = "Please fill in all fields.";
+                msgEl.style.color = "red";
+                return;
+            }
+
+            const { data, error } = await supabase.rpc("submit_borrowing_request", {
+                p_equipment_id: equipmentId,
+                p_reason: reason
+            });
+
+            if (error) {
+                msgEl.textContent = "Error: " + error.message;
+                msgEl.style.color = "red";
+                return;
+            }
+
+            if (data.success) {
+                msgEl.textContent = data.message;
+                msgEl.style.color = "green";
+                document.getElementById("borrowReason").value = "";
+                document.getElementById("borrowEquipment").value = "";
+                await loadMyRequests();
+            } else {
+                msgEl.textContent = data.error || "Submission failed.";
+                msgEl.style.color = "red";
+            }
+        });
+
+        // ========================================
+        // LOAD MY REQUESTS
+        // ========================================
+
+        async function loadMyRequests() {
+            const table = document.getElementById("requestsTable");
+            let query = supabase
+                .from("borrowing_requests")
+                .select("*, equipment:equipment_id(name, equipment_id)")
+                .order("created_at", { ascending: false });
+
+            if (!isAdmin) {
+                query = query.eq("user_id", profile.authUser.id);
+            }
+
+            const { data, error } = await query;
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="4">Unable to load requests.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="4">No requests found.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            data.forEach(req => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${req.request_id || req.id}</td>
+                    <td>${req.equipment?.equipment_id || req.equipment?.name || "N/A"}</td>
+                    <td>${req.request_date ? new Date(req.request_date).toLocaleDateString() : "N/A"}</td>
+                    <td><span class="status-badge status-${req.status}">${req.status}</span></td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        // ========================================
+        // LOAD APPROVAL QUEUE (Admin/Staff)
+        // ========================================
+
+        async function loadApprovalQueue() {
+            if (!isAdmin && !isStaff) return;
+
+            const table = document.getElementById("approvalTable");
+            const { data, error } = await supabase
+                .from("borrowing_requests")
+                .select("*, profiles(full_name), equipment(name, equipment_id)")
+                .in("status", ["Pending", "Approved"])
+                .order("created_at", { ascending: false });
+
+            if (error || !data) return;
+
+            table.innerHTML = "";
+            data.forEach(req => {
+                const row = document.createElement("tr");
+                let actions = "";
+
+                if (isAdmin && req.status === "Pending") {
+                    actions = `
+                        <button class="btn-approve" onclick="approveReq('${req.request_id}')">Approve</button>
+                        <button class="btn-reject" onclick="rejectReq('${req.request_id}')">Reject</button>
+                    `;
+                } else if (isStaff && req.status === "Approved") {
+                    actions = `
+                        <button class="btn-release" onclick="releaseReq('${req.request_id}')">Release</button>
+                    `;
+                }
+
+                row.innerHTML = `
+                    <td>${req.request_id}</td>
+                    <td>${req.profiles?.full_name || "N/A"}</td>
+                    <td>${req.equipment?.equipment_id || "N/A"}</td>
+                    <td>${req.request_date ? new Date(req.request_date).toLocaleDateString() : "N/A"}</td>
+                    <td><span class="status-badge status-${req.status}">${req.status}</span></td>
+                    <td class="action-cell">${actions}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        // ========================================
+        // APPROVE REQUEST (Admin only - via RPC)
+        // ========================================
+
+        window.approveReq = async function(requestId) {
+            if (!confirm(`Approve request ${requestId}?`)) return;
+            const { data, error } = await supabase.rpc("approve_borrowing_request", { p_request_id: requestId });
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert(data.message);
+                await loadApprovalQueue();
+                await loadMyRequests();
+            }
+        };
+
+        // ========================================
+        // REJECT REQUEST (Admin only - via RPC)
+        // ========================================
+
+        window.rejectReq = async function(requestId) {
+            const reason = prompt("Enter rejection reason (optional):");
+            if (reason === null) return;
+            const { data, error } = await supabase.rpc("reject_borrowing_request", {
+                p_request_id: requestId,
+                p_reason: reason || null
+            });
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert(data.message);
+                await loadApprovalQueue();
+                await loadMyRequests();
+            }
+        };
+
+        // ========================================
+        // RELEASE EQUIPMENT (Staff/Admin - via RPC)
+        // ========================================
+
+        window.releaseReq = async function(requestId) {
+            if (!confirm(`Release equipment for request ${requestId}?`)) return;
+            const { data, error } = await supabase.rpc("release_equipment", { p_request_id: requestId });
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert(data.message);
+                await loadApprovalQueue();
+                await loadMyRequests();
+            }
+        };
+
+        // Refresh approval queue periodically
+        setInterval(loadApprovalQueue, 10000);
+    </script>
+
+</body>
+</html>

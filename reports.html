@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; }
+        .stat-card h3 { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .stat-card p { font-size: 30px; font-weight: bold; color: #1f2937; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Pending { background: #fef3c7; color: #92400e; }
+        .status-Approved { background: #d1fae5; color: #065f46; }
+        .status-Rejected { background: #fee2e2; color: #991b1b; }
+        .status-Released { background: #dbeafe; color: #1e40af; }
+        .status-Returned { background: #e0e7ff; color: #3730a3; }
+        .status-Closed { background: #d1d5db; color: #374151; }
+        @media (max-width: 800px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Reports</h1>
+            <p>View system statistics and reports.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Equipment</h3>
+                <p id="totalEquipment">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Available</h3>
+                <p id="availableEquipment">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Borrowed</h3>
+                <p id="borrowedEquipment">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Under Maintenance</h3>
+                <p id="maintenanceEquipment">0</p>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Requests</h3>
+                <p id="totalRequests">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Pending</h3>
+                <p id="pendingRequests">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Approved</h3>
+                <p id="approvedRequests">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Closed</h3>
+                <p id="closedRequests">0</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Equipment Status</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equipmentReportTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Audit Log Entries</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Module</th>
+                            <th>Record ID</th>
+                            <th>Description</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentAuditTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator"]);
+
+        if (profile) {
+            await loadReports();
+        }
+
+        async function loadReports() {
+            // Equipment stats
+            const { data: equipmentData } = await supabase.from("equipment").select("*");
+            const equipment = equipmentData || [];
+
+            document.getElementById("totalEquipment").textContent = equipment.length;
+            document.getElementById("availableEquipment").textContent = equipment.filter(e => e.status === "Available").length;
+            document.getElementById("borrowedEquipment").textContent = equipment.filter(e => e.status === "Borrowed").length;
+            document.getElementById("maintenanceEquipment").textContent = equipment.filter(e => e.status === "Under Maintenance").length;
+
+            // Request stats
+            const { data: requestData } = await supabase.from("borrowing_requests").select("*");
+            const requests = requestData || [];
+
+            document.getElementById("totalRequests").textContent = requests.length;
+            document.getElementById("pendingRequests").textContent = requests.filter(r => r.status === "Pending").length;
+            document.getElementById("approvedRequests").textContent = requests.filter(r => r.status === "Approved").length;
+            document.getElementById("closedRequests").textContent = requests.filter(r => r.status === "Closed").length;
+
+            // Equipment table
+            const eqTable = document.getElementById("equipmentReportTable");
+            if (equipment.length === 0) {
+                eqTable.innerHTML = `<tr><td colspan="4">No equipment.</td></tr>`;
+            } else {
+                eqTable.innerHTML = "";
+                equipment.forEach(eq => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${eq.equipment_id}</td>
+                        <td>${eq.name}</td>
+                        <td>${eq.category || "N/A"}</td>
+                        <td><span class="status-badge status-${eq.status}">${eq.status}</span></td>
+                    `;
+                    eqTable.appendChild(row);
+                });
+            }
+
+            // Recent audit logs
+            const { data: auditData } = await supabase
+                .from("audit_logs")
+                .select("*")
+                .order("created_at", { ascending: false })
+                .limit(20);
+
+            const auditTable = document.getElementById("recentAuditTable");
+            if (!auditData || auditData.length === 0) {
+                auditTable.innerHTML = `<tr><td colspan="5">No audit logs.</td></tr>`;
+            } else {
+                auditTable.innerHTML = "";
+                auditData.forEach(log => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td><strong>${log.action || "N/A"}</strong></td>
+                        <td>${log.module || "N/A"}</td>
+                        <td>${log.record_id || "N/A"}</td>
+                        <td>${log.description || "N/A"}</td>
+                        <td>${log.created_at ? new Date(log.created_at).toLocaleString() : "N/A"}</td>
+                    `;
+                    auditTable.appendChild(row);
+                });
+            }
+        }
+    </script>
+
+</body>
+</html>

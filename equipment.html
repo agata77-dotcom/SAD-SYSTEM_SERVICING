@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Equipment - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Available { background: #d1fae5; color: #065f46; }
+        .status-Borrowed { background: #dbeafe; color: #1e40af; }
+        .status-Under Maintenance { background: #fef3c7; color: #92400e; }
+        .status-Unavailable { background: #fee2e2; color: #991b1b; }
+        .btn-edit { background: #3b82f6; color: white; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-delete { background: #ef4444; color: white; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Equipment</h1>
+            <p>View laboratory equipment and availability.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <div class="page-header">
+            <div>
+                <h2>Equipment Inventory</h2>
+                <p>Laboratory equipment available in the system.</p>
+            </div>
+            <button class="primary-btn" id="addEquipmentBtn">+ Add Equipment</button>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Equipment ID</th>
+                            <th>Equipment Name</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equipmentTable">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" id="addFormCard" style="display:none;">
+            <h2>Add Equipment</h2>
+            <form id="addEquipmentForm">
+                <div class="form-group">
+                    <label for="equipID">Equipment ID</label>
+                    <input type="text" id="equipID" placeholder="e.g. LAP-004" required>
+                </div>
+                <div class="form-group">
+                    <label for="equipName">Name</label>
+                    <input type="text" id="equipName" placeholder="Equipment name" required>
+                </div>
+                <div class="form-group">
+                    <label for="equipCategory">Category</label>
+                    <input type="text" id="equipCategory" placeholder="e.g. Laptop" required>
+                </div>
+                <div class="form-group">
+                    <label for="equipLocation">Location</label>
+                    <input type="text" id="equipLocation" placeholder="e.g. Room 201">
+                </div>
+                <button type="submit" class="btn-primary">Add Equipment</button>
+                <button type="button" class="btn-secondary" id="cancelAddBtn">Cancel</button>
+            </form>
+            <p id="equipMessage" class="message" style="margin-top:15px;"></p>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator", "Laboratory Staff", "Requester"]);
+
+        if (profile) {
+            const isAdmin = profile.role === "Administrator";
+            const isStaff = profile.role === "Laboratory Staff";
+
+            if (!isAdmin && !isStaff) {
+                const btn = document.getElementById("addEquipmentBtn");
+                if (btn) btn.style.display = "none";
+            }
+
+            await loadEquipment();
+            setupAddForm();
+        }
+
+        function setupAddForm() {
+            const btn = document.getElementById("addEquipmentBtn");
+            const card = document.getElementById("addFormCard");
+            const cancel = document.getElementById("cancelAddBtn");
+
+            if (btn) {
+                btn.addEventListener("click", () => {
+                    card.style.display = card.style.display === "none" ? "block" : "none";
+                });
+            }
+            if (cancel) {
+                cancel.addEventListener("click", () => { card.style.display = "none"; });
+            }
+
+            const form = document.getElementById("addEquipmentForm");
+            if (form) {
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const msg = document.getElementById("equipMessage");
+                    const data = {
+                        equipment_id: document.getElementById("equipID").value.trim(),
+                        name: document.getElementById("equipName").value.trim(),
+                        category: document.getElementById("equipCategory").value.trim(),
+                        location: document.getElementById("equipLocation").value.trim(),
+                        status: "Available"
+                    };
+
+                    if (!data.equipment_id || !data.name) {
+                        msg.textContent = "Fill required fields.";
+                        msg.style.color = "red";
+                        return;
+                    }
+
+                    const { error } = await supabase.from("equipment").insert(data);
+                    if (error) {
+                        msg.textContent = "Error: " + error.message;
+                        msg.style.color = "red";
+                    } else {
+                        msg.textContent = "Equipment added.";
+                        msg.style.color = "green";
+                        card.style.display = "none";
+                        form.reset();
+                        await loadEquipment();
+                    }
+                });
+            }
+        }
+
+        async function loadEquipment() {
+            const table = document.getElementById("equipmentTable");
+            const { data, error } = await supabase.from("equipment").select("*").order("name");
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="6">Unable to load.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="6">No equipment records.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            const canEdit = profile.role === "Administrator" || profile.role === "Laboratory Staff";
+
+            data.forEach(eq => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${eq.equipment_id}</td>
+                    <td>${eq.name}</td>
+                    <td>${eq.category || "N/A"}</td>
+                    <td><span class="status-badge status-${eq.status}">${eq.status}</span></td>
+                    <td>${eq.location || "N/A"}</td>
+                    <td>
+                        ${canEdit ? `<button class="btn-edit" onclick="editEquip('${eq.id}')">Edit</button>` : ""}
+                        ${isAdmin ? `<button class="btn-delete" onclick="deleteEquip('${eq.id}')">Delete</button>` : ""}
+                    </td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        window.editEquip = function(id) {
+            alert("Edit functionality for equipment " + id + " - implement as needed.");
+        };
+
+        window.deleteEquip = async function(id) {
+            if (!confirm("Delete this equipment?")) return;
+            const { error } = await supabase.from("equipment").delete().eq("id", id);
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert("Deleted.");
+                await loadEquipment();
+            }
+        };
+    </script>
+
+</body>
+</html>

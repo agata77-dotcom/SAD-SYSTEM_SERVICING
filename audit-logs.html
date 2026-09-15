@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs - ICT Service Request System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-container { width: 90%; max-width: 1300px; margin: 30px auto; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .card h2 { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
+        th { background: #f9fafb; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div>
+            <h1>Audit Logs</h1>
+            <p>Track all critical system actions.</p>
+        </div>
+        <a href="index.html">← Dashboard</a>
+    </header>
+
+    <main class="page-container">
+
+        <div class="card">
+            <h2>Audit Trail</h2>
+            <p>All sensitive operations performed by administrators and staff are recorded here.</p>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Module</th>
+                            <th>Record ID</th>
+                            <th>Description</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTable">
+                        <tr><td colspan="7">Loading audit logs...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { requireRole } from "./js/auth.js";
+        import { supabase } from "./js/supabase.js";
+
+        const profile = await requireRole(["Administrator"]);
+
+        if (profile) {
+            await loadAuditLogs();
+        }
+
+        async function loadAuditLogs() {
+            const table = document.getElementById("auditTable");
+
+            const { data, error } = await supabase
+                .from("audit_logs")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (error || !data) {
+                table.innerHTML = `<tr><td colspan="7">Unable to load audit logs.</td></tr>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                table.innerHTML = `<tr><td colspan="7">No audit logs recorded yet.</td></tr>`;
+                return;
+            }
+
+            table.innerHTML = "";
+            data.forEach(log => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${log.id ? log.id.slice(0, 8) : "N/A"}</td>
+                    <td>${log.user_id ? (log.user_id.slice(0, 8)) : "System"}</td>
+                    <td><strong>${log.action || "N/A"}</strong></td>
+                    <td>${log.module || "N/A"}</td>
+                    <td>${log.record_id || "N/A"}</td>
+                    <td>${log.description || "N/A"}</td>
+                    <td>${log.created_at ? new Date(log.created_at).toLocaleString() : "N/A"}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+    </script>
+
+</body>
+</html>
