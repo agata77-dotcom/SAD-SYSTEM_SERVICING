@@ -30,35 +30,50 @@
                 <p id="loginMessage" class="message"></p>
             </form>
 
-            <div style="margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 8px; font-size: 13px;">
-                <p><strong>Demo Accounts (via Supabase Auth):</strong></p>
-                <p>Admin: admin@ict.local / admin123</p>
-                <p>Staff: staff@ict.local / staff123</p>
-                <p>Requester: requester@ict.local / req123</p>
-                <p style="color: #666; margin-top: 8px;">Register via Supabase Auth UI or add users via SQL.</p>
+            <div style="margin-top: 20px; padding: 15px; background: #fef9c3; border-radius: 8px; font-size: 13px; border: 1px solid #fbbf24;">
+                <p style="font-weight: bold; margin-bottom: 8px;">No Pre-Configured Accounts</p>
+                <p style="color: #333;">Create accounts via Supabase Auth first.</p>
+                <p style="margin-top: 6px; color: #666;">See SETUP.md for instructions.</p>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase.js"></script>
-    <script src="js/auth.js"></script>
-    <script>
+    <script type="module">
+        import { supabase } from './js/supabase.js';
+        import { getCurrentUserProfile } from './js/auth.js';
+
+        // Check if already logged in
+        const check = await getCurrentUserProfile();
+        if (check) {
+            window.location.href = 'index.html';
+        }
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const msg = document.getElementById('loginMessage');
 
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            msg.style.color = '#666';
+            msg.textContent = 'Logging in...';
 
-            if (error) {
-                msg.textContent = error.message;
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+                if (error) {
+                    msg.style.color = 'red';
+                    msg.textContent = 'Login failed: ' + error.message;
+                    return;
+                }
+
+                if (data && data.user) {
+                    msg.style.color = 'green';
+                    msg.textContent = 'Login successful! Redirecting...';
+                    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+                }
+            } catch (err) {
                 msg.style.color = 'red';
-            } else {
-                msg.textContent = 'Login successful! Redirecting...';
-                msg.style.color = 'green';
-                setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+                msg.textContent = 'Unexpected error: ' + err.message;
             }
         });
     </script>

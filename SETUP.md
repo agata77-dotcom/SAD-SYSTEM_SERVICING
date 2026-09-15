@@ -31,14 +31,28 @@ This inserts 9 sample equipment items.
 
 ## Step 3: Create Authenticated Users
 
-In Supabase Dashboard → Authentication → Users:
-1. Click **Add user**
-2. Create these accounts:
-   - Email: `admin@ict.local`, Password: `admin123` → Role: Administrator
-   - Email: `staff@ict.local`, Password: `staff123` → Role: Laboratory Staff
-   - Email: `requester@ict.local`, Password: `req123` → Role: Requester
+### Option A: Via Supabase Dashboard (Recommended)
 
-## Step 4: Set User Roles via Profiles
+1. Go to Supabase Dashboard → **Authentication** → **Users** → **Add user**
+2. Create these accounts:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Administrator | admin@ict.local | Admin123! |
+| Laboratory Staff | staff@ict.local | Staff123! |
+| Requester | requester@ict.local | Requester123! |
+
+### Option B: Via SQL (in Supabase SQL Editor)
+
+```sql
+SELECT auth.create_user('admin@ict.local', 'Admin123!', '{\"full_name\":\"Administrator\",\"role\":\"Administrator\"}');
+SELECT auth.create_user('staff@ict.local', 'Staff123!', '{\"full_name\":\"Laboratory Staff\",\"role\":\"Laboratory Staff\"}');
+SELECT auth.create_user('requester@ict.local', 'Requester123!', '{\"full_name\":\"Requester\",\"role\":\"Requester\"}');
+```
+
+> ⚠️ If `auth.create_user` is not available, use the Dashboard method.
+
+### Step 3b: Set User Roles
 
 After creating users, go to Table Editor → `profiles` and update each user's role:
 
